@@ -1,0 +1,117 @@
+
+
+
+# Import libraries
+import numpy as np
+import time
+from pyspark.sql.session import SparkSession
+from pyspark.sql import SQLContext
+from pyspark.ml.feature import StringIndexer, VectorIndexer, VectorAssembler, FeatureHasher
+from pyspark.ml.classification import DecisionTreeClassifier
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+from pyspark.sql.types import LongType
+from pyspark.ml.feature import MinMaxScaler
+from pyspark import SparkContext, SparkConf
+
+
+start_time = time.time()
+
+###### setup configuration from https://macxima.medium.com/pyspark-read-csv-file-into-dataframe-6cef1f0edfdc #####################################################
+#set the master URL, set an application name 
+conf = SparkConf().setAppName("DavidRhodeTree")
+#start spark cluster, if already started then get it else start it 
+sc = SparkContext.getOrCreate(conf=conf)
+spark = SparkSession(sc)
+#initialize SQLContext from spark cluster 
+sqlContext = SQLContext(sc)
+#name of the datafile being used
+FileName="preprocessed.csv"
+#dataframe, set header property true for the actual header columns
+dataframe = sqlContext.read.csv(FileName, header=False)
+data = dataframe.select([dataframe[c].cast('float').alias(c) for c in dataframe.columns])
+###########################################################################################################################################################################
+
+
+#contains all features but the predicted feature (is removed via .drop)
+features = data.drop('_c1')
+
+#contains only the predicted feature column
+labels = data.select('_c1').withColumnRenamed('_c1',"label")
+
+
+# Index labels, adding metadata to the label column.
+# Fit on whole dataset to include all labels in index. ## NOTE YOU NEE HANDLEINVALID 
+labelIndexer = StringIndexer(inputCol="label", outputCol="indexedLabel", handleInvalid ="keep").fit(labels)
+labels_only = labelIndexer.transform(labels)
+
+
+# Assemble feature values to allow for VectorIndexer to function properly
+vector_assembler = VectorAssembler(handleInvalid="skip").setInputCols(features.schema.names).setOutputCol("features")
+feature_col = vector_assembler.transform(features)
+
+# Automatically identify categorical features, and index them.
+# We specify maxCategories so features with > 4 distinct values are treated as continuous.
+Vector_indexer = VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=4).fit(feature_col)
+features_only = Vector_indexer.transform(feature_col).select("features")
+
+
+# Scaling features using Min-Max method
+MinMax = MinMaxScaler(inputCol="features", outputCol="scaledFeatures")
+featuresScaled = MinMax.fit(feature_col)
+feature_col = featuresScaled.transform(feature_col).select("features")
+
+# Split the data into training and test sets (30% held out for testing)
+(trainingData, testData) = data.randomSplit([0.7, 0.3], seed = 111)
+
+# Function which makes each indexed dataframe into an rdd
+def zipindexdf(df):
+    schema_new = df.schema.add("index", LongType(), False)
+    return df.rdd.zipWithIndex().map(lambda l: list(l[0]) + [l[1]]).toDF(schema_new)
+features_col_index = zipindexdf(features_only)
+labels_ind_index = zipindexdf(labels_only)
+
+#where the joining is actually done
+df = features_col_index.join(labels_ind_index, "index", "inner").select("features","indexedLabel").withColumnRenamed("indexedLabel","label").drop("labelIndex")
+
+#initialise the required arrays to record decision tree data
+times_dtree = []
+accuracy_recs_dtree_train = []
+accuracy_recs_dtree_test = []
+
+# Split the data into training and test sets (30% held out for testing)
+train,test = df.randomSplit([0.7,0.3], seed=123)
+
+# Train a DecisionTree model using the training dataset
+dt = DecisionTreeClassifier(maxDepth=3, labelCol="label", leafCol="leafId")
+dtModel = dt.fit(train)
+
+# Generate predictions for the training and test datasets
+predictions_train = dtModel.transform(train)
+predictions_test = dtModel.transform(test)
+
+# Select (prediction, true label) and compute test error
+evaluator = MulticlassClassificationEvaluator()
+evaluator.setPredictionCol("prediction")
+accuracy_train = evaluator.evaluate(predictions_train.select("prediction", "label"), {evaluator.metricName: "accuracy"})
+accuracy_recs_dtree_train.append(accuracy_train)
+accuracy_test = evaluator.evaluate(predictions_test.select("prediction", "label"), {evaluator.metricName: "accuracy"})
+accuracy_recs_dtree_test.append(accuracy_test)
+
+#Running time calculators
+time_total = time.time() - start_time
+times_dtree.append(time_total)
+
+print("\nTraining Set")
+print("Average Accuracy:",np.mean(accuracy_recs_dtree_train))
+print("Minimum Accuracy:",np.min(accuracy_recs_dtree_train))
+print("Maximum Accuracy:",np.max(accuracy_recs_dtree_train))
+print("Accuracy Standard Dev:",np.std(accuracy_recs_dtree_train))
+print("\nTest Set")
+print("Average Accuracy:",np.mean(accuracy_recs_dtree_test))
+print("Minimum Accuracy:",np.min(accuracy_recs_dtree_test))
+print("Maximum Accuracy:",np.max(accuracy_recs_dtree_test))
+print("Accuracy Standard Dev:",np.std(accuracy_recs_dtree_test))
+print("")
+print("Total Program Time:", (time.time()-start_time))
+
+spark.stop()
