@@ -1,0 +1,160 @@
+Question 1 Code:
+\\load csv data into R
+ Credit = read.csv(file = 'Credit.csv')
+
+\\code to produce a linear regression model for the Credit.csv data
+ X = model.matrix(Balance~.,Credit)[,-1]
+ y = Credit$Balance
+ linear.mod = lm(y~X)
+
+\\producing training data and test data sets
+set.seed(987654312)
+train = sample(1:nrow(X),nrow(X)/2)
+test = -train
+linear.mod = lm(y[train]~X[train,])
+\\test error for training data
+linear.pred = coef(linear.mod)[1]+X[test,] %*% coef(linear.mod)[-1]
+mean((linear.pred-y[test])^2)
+
+
+RIDGE REGRESSION
+\\tuning parameter for the ridge regression model using crossvalidation
+library(glmnet)
+set.seed(987654313).
+grid = 10^seq(5,-2,length=100)
+cv.out = cv.glmnet(X[train,],y[train],alpha=0,lambda=grid,nfolds=10,thresh=1e-12)
+cv.out$lambda.min
+
+\\test error post cross-validation
+bestlam = cv.out$lambda.min
+ridge.pred = predict(cv.out,s=bestlam,newx=X[test,])
+mean((ridge.pred-y[test])^2)
+
+LASSO REGRESSION
+\\cross-validation for tunning parameter lambda
+set.seed(987654313)
+grid = 10^seq(5,-2,length=100)
+cv.out = cv.glmnet(X[train,],y[train],alpha=1,lambda=grid,nfolds=10,thresh=1e-12)
+cv.out$lambda.min
+
+\\test error post cross-validation
+ bestlam = cv.out$lambda.min
+ lasso.pred = predict(cv.out,s=bestlam,newx=X[test,])
+mean((lasso.pred-y[test])^2)
+
+
+Question 2
+
+\\creating natural splines for age
+Credit = read.csv('/home/rhodedavi/private/AIML 427/Assignment 2/Ass2Data/Credit.csv')\
+set.seed(987654312)
+attach(Credit)
+library(gam)
+train = sample(1:nrow(Credit),nrow(Credit)/2)
+test = -train
+gam.mod1 = gam(Balance~ns(Income,df=4)+ns(Age,df=1)+Student,data=Credit[train,]) 
+gam.mod2 = gam(Balance~ns(Income,df=4)+ns(Age,df=2)+Student,data=Credit[train,])
+gam.mod3 = gam(Balance~ns(Income,df=4)+ns(Age,df=3)+Student,data=Credit[train,])
+gam.mod4 = gam(Balance~ns(Income,df=4)+ns(Age,df=4)+Student,data=Credit[train,])
+gam.mod5 = gam(Balance~ns(Income,df=4)+ns(Age,df=5)+Student,data=Credit[train,])
+gam.mod6 = gam(Balance~ns(Income,df=4)+ns(Age,df=6)+Student,data=Credit[train,])nrow(parkingsons)*0.6
+gam.mod7 = gam(Balance~ns(Income,df=4)+ns(Age,df=7)+Student,data=Credit[train,])
+gam.mod8 = gam(Balance~ns(Income,df=4)+ns(Age,df=8)+Student,data=Credit[train,])
+gam.mod9 = gam(Balance~ns(Income,df=4)+ns(Age,df=9)+Student,data=Credit[train,])
+gam.mod10 = gam(Balance~ns(Income,df=4)+ns(Age,df=10)+Student,data=Credit[train,])
+pred.mod1 = predict(gam.mod1,newdata=Credit[test,])
+pred.mod2 = predict(gam.mod2,newdata=Credit[test,])
+pred.mod3 = predict(gam.mod3,newdata=Credit[test,])
+pred.mod4 = predict(gam.mod4,newdata=Credit[test,])
+pred.mod5 = predict(gam.mod5,newdata=Credit[test,])
+pred.mod6 = predict(gam.mod6,newdata=Credit[test,])
+pred.mod7 = predict(gam.mod7,newdata=Credit[test,])
+pred.mod8 = predict(gam.mod8,newdata=Credit[test,])
+pred.mod9 = predict(gam.mod9,newdata=Credit[test,])
+pred.mod10 = predict(gam.mod10,newdata=Credit[test,])
+mse1 = mean((pred.mod1-Balance[test])^2) 
+mse2 = mean((pred.mod2-Balance[test])^2)
+mse3 = mean((pred.mod3-Balance[test])^2)
+mse4 = mean((pred.mod4-Balance[test])^2)
+mse5 = mean((pred.mod5-Balance[test])^2)
+mse6 = mean((pred.mod6-Balance[test])^2)
+mse7 = mean((pred.mod7-Balance[test])^2)
+mse8 = mean((pred.mod8-Balance[test])^2)
+mse9 = mean((pred.mod9-Balance[test])^2)
+mse10 = mean((pred.mod10-Balance[test])^2)
+c(mse1, mse2, mse3, mse4, mse5, mse6, mse7, mse8, mse9, mse10)
+
+\\Question 3
+parkingsons = read.csv('/home/rhodedavi/private/AIML 427/Assignment 2/Ass2Data/parkinsons.csv')
+X = model.matrix(UPDRS~.,parkingsons)[,-1]
+X=scale(X)
+set.seed(987654312)
+train = sample(1:nrow(parkingsons),30)
+test = -train
+y = parkingsons$UPDRS
+linear.mod = lm(y~X)
+summary(linear.mod)
+
+\\Question 3 lasso
+library(glmnet)
+set.seed(987654313)
+grid = 10^seq(3,-1,length=100)
+cv.out = cv.glmnet(X[train],y[train],alpha=1,lambda=grid,nfolds=nrow(parkingsons)-1,thresh=1e-12)
+cv.out$lambda.min
+bestlam = cv.out$lambda.min
+lasso.mod = glmnet(X,y,alpha=1,lambda=grid,thresh=1e-12)
+lasso.pred = predict(cv.out,s=bestlam,newx=X[test,])
+mean((lasso.pred-y[test])^2)
+coef(lasso.mod)[,100]
+
+\\Question 3.4 different random split
+set.seed(987654322)
+train = sample(1:nrow(parkingsons),30)
+test = -train
+cv.out = cv.glmnet(X[train,],y[train],alpha=1,lambda=grid,nfolds=nrow(parkingsons)-1,thresh=1e-12)
+cv.out$lambda.min
+lasso.mod = glmnet(X,y,alpha=1,lambda=grid,thresh=1e-12)
+bestlam = cv.out$lambda.min
+lasso.pred = predict(cv.out,s=bestlam,newx=X[test,])
+mean((lasso.pred-y[test])^2)
+coef(lasso.mod)[,100]
+
+\\Question4.1
+\\clustering
+library(ISLR)
+nci.labs=NCI60$labs
+nci.data=NCI60$data
+X = scale(nci.data)
+P = X %*% prcomp(X)$rotation
+data.dist=dist(X, method = "euclidean")
+
+hc.out=hclust(data.dist)
+hc.clusters =cutree (hc.out ,4)
+plot(hc.out,xlab="",ylab="",sub="",cex=0.5, main ="Euclidean Distance")
+hc.table = table(hc.clusters ,nci.labs)
+
+\\2 PCAs
+plot(P[,1],P[,2], xlab="PCA1", ylab="PCA2")
+
+\\Question 4.2
+library(ISLR)
+nci.labs=NCI60$labs
+nci.data=NCI60$data
+X = scale(nci.data)
+P = X %*% prcomp(X)$rotation
+data.dist=as.dist(cor(t(X)))
+cd.out=hclust(data.dist)
+cd.clusters =cutree (hc.out ,4)
+plot(cd.out,xlab="",ylab="",sub="",cex=0.5, main ="Correlation-Based Distance")
+cd.tabble = table(cd.clusters ,nci.labs)
+
+\\Question 4.3
+library(ISLR)
+nci.labs=NCI60$labs
+nci.data=NCI60$data
+X = scale(nci.data)
+P = X %*% prcomp(X)$rotation
+set.seed(2)
+km.out=kmeans(X , 4, nstart =20)
+km.clusters =km.out$cluster
+km.table=table(km.clusters ,nci.labs)
